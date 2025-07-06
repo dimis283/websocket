@@ -120,55 +120,76 @@
     </style>
 </head>
 <body>
-    <div class="chat-container">
-        <div class="chat-header">
-            <h2>Spring WebSocket Chat</h2>
-        </div>
-        
-        <!-- Username Page -->
-        <div id="username-page" class="username-page">
-            <h3>Enter your username to join the chat</h3>
-            <input type="text" id="name" placeholder="Enter your name" maxlength="50">
-            <button id="connect" onclick="connect()">Join Chat</button>
-        </div>
-        
-        <!-- Chat Page -->
-        <div id="chat-page" class="chat-page">
-            <div id="connecting" class="connecting">
-                Connecting...
-            </div>
-            
-            <div id="message-area" class="message-area">
-                <!-- Messages will be displayed here -->
-            </div>
-            
-            <form id="messageForm" class="message-form" onsubmit="sendMessage(event)">
-                <input type="text" id="message" placeholder="Type a message..." autocomplete="off">
-                <button type="submit">Send</button>
-            </form>
-        </div>
+<div class="chat-container">
+    <div class="chat-header">
+        <h2>Spring WebSocket Chat</h2>
     </div>
 
-    <!-- Include SockJS and STOMP libraries -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.6.1/sockjs.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
-    
-    <script>
+    <!-- Username Page -->
+    <div id="username-page" class="username-page">
+        <h3>Enter your username to join the chat</h3>
+        <input type="text" id="name" placeholder="Enter your name" maxlength="50">
+        <button id="connect">Join Chat</button>
+    </div>
+
+    <!-- Chat Page -->
+    <div id="chat-page" class="chat-page">
+        <div id="connecting" class="connecting">
+            Connecting...
+        </div>
+
+        <div id="message-area" class="message-area">
+            <!-- Messages will be displayed here -->
+        </div>
+
+        <form id="messageForm" class="message-form">
+            <input type="text" id="message" placeholder="Type a message..." autocomplete="off">
+            <button type="submit">Send</button>
+        </form>
+    </div>
+</div>
+
+<!-- Include jQuery, SockJS and STOMP libraries -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.6.1/sockjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+
+<script>
+    $(document).ready(function() {
         let stompClient = null;
         let username = null;
         let colors = ['#2196F3', '#32c787', '#00BCD4', '#ff5652', '#ffc107', '#ff85af', '#FF9800', '#39bbb0'];
 
+        // Connect button click handler
+        $('#connect').click(connect);
+
+        // Username field enter key handler
+        $('#name').keypress(function(event) {
+            if (event.which === 13) { // Enter key
+                connect();
+            }
+        });
+
+        // Message form submit handler
+        $('#messageForm').submit(sendMessage);
+
+        // Message field enter key handler
+        $('#message').keypress(function(event) {
+            if (event.which === 13) { // Enter key
+                sendMessage(event);
+            }
+        });
+
         function connect() {
-            username = document.getElementById('name').value.trim();
-            
+            username = $('#name').val().trim();
+
             if (username) {
-                document.getElementById('username-page').classList.add('hidden');
-                document.getElementById('chat-page').classList.remove('hidden');
-                document.getElementById('chat-page').style.display = 'block';
-                
+                $('#username-page').addClass('hidden');
+                $('#chat-page').removeClass('hidden').show();
+
                 const socket = new SockJS('/ws');
                 stompClient = Stomp.over(socket);
-                
+
                 stompClient.connect({}, onConnected, onError);
             } else {
                 alert('Please enter your name');
@@ -178,63 +199,62 @@
         function onConnected() {
             // Subscribe to the public topic
             stompClient.subscribe('/topic/public', onMessageReceived);
-            
+
             // Tell the server about the new user
-            stompClient.send("/app/chat.addUser", {}, JSON.stringify({ 
-                sender: username, 
-                type: 'JOIN' 
+            stompClient.send("/app/chat.addUser", {}, JSON.stringify({
+                sender: username,
+                type: 'JOIN'
             }));
-            
-            document.getElementById('connecting').classList.add('hidden');
+
+            $('#connecting').addClass('hidden');
         }
 
         function onError(error) {
-            document.getElementById('connecting').textContent = 'Could not connect to WebSocket server. Please refresh this page to try again!';
-            document.getElementById('connecting').style.color = 'red';
+            $('#connecting').text('Could not connect to WebSocket server. Please refresh this page to try again!')
+                           .css('color', 'red');
         }
 
         function sendMessage(event) {
             event.preventDefault();
-            
-            const messageContent = document.getElementById('message').value.trim();
-            
+
+            const messageContent = $('#message').val().trim();
+
             if (messageContent && stompClient) {
                 const chatMessage = {
                     sender: username,
                     content: messageContent,
                     type: 'CHAT'
                 };
-                
+
                 stompClient.send("/app/chat.sendMessage", {}, JSON.stringify(chatMessage));
-                document.getElementById('message').value = '';
+                $('#message').val('');
             }
         }
 
         function onMessageReceived(payload) {
             const message = JSON.parse(payload.body);
-            const messageElement = document.createElement('div');
-            messageElement.className = 'message ' + message.type.toLowerCase();
-            
+            const messageElement = $('<div>').addClass('message ' + message.type.toLowerCase());
+
             if (message.type === 'JOIN') {
-                messageElement.innerHTML = `
+                messageElement.html(`
                     <div>${message.content}</div>
                     <div class="message-time">${message.timestamp}</div>
-                `;
+                `);
             } else if (message.type === 'LEAVE') {
-                messageElement.innerHTML = `
+                messageElement.html(`
                     <div>${message.content}</div>
                     <div class="message-time">${message.timestamp}</div>
-                `;
+                `);
             } else {
-                messageElement.innerHTML = `
+                messageElement.html(`
                     <div class="message-sender" style="color: ${getAvatarColor(message.sender)}">${message.sender}</div>
                     <div>${message.content}</div>
                     <div class="message-time">${message.timestamp}</div>
-                `;
+                `);
             }
-            
-            document.getElementById('message-area').appendChild(messageElement);
-            document.getElementById('message-area').scrollTop = document.getElementById('message-area').scrollHeight;
+
+            $('#message-area').append(messageElement);
+            $('#message-area').scrollTop($('#message-area')[0].scrollHeight);
         }
 
         function getAvatarColor(messageSender) {
@@ -245,20 +265,7 @@
             const index = Math.abs(hash % colors.length);
             return colors[index];
         }
-
-        // Allow sending message by pressing Enter
-        document.getElementById('message').addEventListener('keypress', function(event) {
-            if (event.key === 'Enter') {
-                sendMessage(event);
-            }
-        });
-
-        // Allow joining by pressing Enter in username field
-        document.getElementById('name').addEventListener('keypress', function(event) {
-            if (event.key === 'Enter') {
-                connect();
-            }
-        });
-    </script>
+    });
+</script>
 </body>
 </html>
